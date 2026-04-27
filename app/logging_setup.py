@@ -19,7 +19,9 @@ def setup_logging(
 
     logger = logging.getLogger(logger_name)
     logger.setLevel(level)
-    logger.handlers.clear()
+    for h in logger.handlers[:]:
+        h.close()
+        logger.removeHandler(h)
 
     fh = logging.FileHandler(log_path, encoding="utf-8")
     fh.setLevel(level)
