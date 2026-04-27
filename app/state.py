@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 from datetime import datetime
@@ -21,7 +22,12 @@ class StateManager:
                     data["processed"] = {}
                 return data
             except (json.JSONDecodeError, OSError):
-                return {"processed": {}, "version": "1"}
+                healed = {"processed": {}, "version": "1"}
+                try:
+                    self._write(healed)
+                except OSError:
+                    pass
+                return healed
         os.makedirs(os.path.dirname(os.path.abspath(self._path)), exist_ok=True)
         initial = {"processed": {}, "version": "1"}
         self._write(initial)
@@ -35,10 +41,13 @@ class StateManager:
         os.replace(tmp, self._path)
 
     def is_processed(self, message_id: str) -> bool:
+        # Returns True for ANY status including 'failed' — failed messages are NOT retried
+        # automatically. To retry, remove the entry from state.json manually.
         return message_id in self._data["processed"]
 
     def get(self, message_id: str) -> Optional[Dict[str, Any]]:
-        return self._data["processed"].get(message_id)
+        entry = self._data["processed"].get(message_id)
+        return copy.deepcopy(entry) if entry is not None else None
 
     def record(
         self,
@@ -58,4 +67,4 @@ class StateManager:
         self._write(self._data)
 
     def all_entries(self) -> Dict[str, Any]:
-        return dict(self._data["processed"])
+        return copy.deepcopy(self._data["processed"])
