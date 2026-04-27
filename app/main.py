@@ -110,7 +110,7 @@ def run() -> int:
                     notifier.send(
                         "Wochenplan Parse-Fehler",
                         f"Keine Daten aus {os.path.basename(pdf_path)}. "
-                        "Prüfe data/debug/ für den extrahierten Text.",
+                        f"Prüfe {cfg.debug_dir}/ für den extrahierten Text.",
                     )
                     processed_fail += 1
                     continue
