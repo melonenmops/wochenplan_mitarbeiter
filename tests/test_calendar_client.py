@@ -17,6 +17,7 @@ def test_dry_run_does_not_touch_calendar():
     client = _make_client()
     client.upsert_event(date(2026, 4, 27), ["Alice"], dry_run=True)
     client._calendar.save_event.assert_not_called()
+    client._calendar.add_event.assert_not_called()
     client._calendar.search.assert_not_called()
 
 
@@ -25,8 +26,8 @@ def test_upsert_creates_event_when_none_exists():
     mock_cal.search.return_value = []
     client = _make_client(mock_cal)
     client.upsert_event(date(2026, 4, 27), ["Alice", "Bob"], dry_run=False)
-    mock_cal.save_event.assert_called_once()
-    ical = mock_cal.save_event.call_args[0][0]
+    mock_cal.add_event.assert_called_once()
+    ical = mock_cal.add_event.call_args[0][0]
     assert "Alice" in ical
     assert "Bob" in ical
 
@@ -39,7 +40,7 @@ def test_upsert_deletes_old_event_before_creating():
     client = _make_client(mock_cal)
     client.upsert_event(date(2026, 4, 27), ["Updated"], dry_run=False)
     existing.delete.assert_called_once()
-    mock_cal.save_event.assert_called_once()
+    mock_cal.add_event.assert_called_once()
 
 
 def test_build_ical_produces_valid_structure():

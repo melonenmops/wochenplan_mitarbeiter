@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
 try:
@@ -29,28 +29,39 @@ class CalendarClient:
         self.event_prefix = event_prefix
         self.logger = logger or logging.getLogger("wochenplan.calendar")
         self._calendar = None
+        self._dav_client = None
 
     def connect(self) -> None:
         if not _HAS_CALDAV:
             raise RuntimeError("caldav library not installed — run: pip install caldav")
         self.logger.info(f"Connecting to CalDAV: {self.caldav_url}")
-        with caldav.DAVClient(
+        self._dav_client = caldav.DAVClient(
             url=self.caldav_url,
             username=self.username,
             password=self._app_password,
-        ) as client:
-            principal = client.principal()
-            calendars = principal.calendars()
-            self.logger.info(f"Found {len(calendars)} calendar(s)")
-            for cal in calendars:
-                if cal.name == self.calendar_name:
-                    self._calendar = cal
-                    self.logger.info(f"Using calendar: '{self.calendar_name}'")
-                    return
-            names = [c.name for c in calendars]
-            raise ValueError(
-                f"Calendar '{self.calendar_name}' not found. Available: {names}"
-            )
+        )
+        principal = self._dav_client.principal()
+        calendars = principal.calendars()
+        self.logger.info(f"Found {len(calendars)} calendar(s)")
+        for cal in calendars:
+            if cal.name == self.calendar_name:
+                self._calendar = cal
+                self.logger.info(f"Using calendar: '{self.calendar_name}'")
+                return
+        names = [c.name for c in calendars]
+        raise ValueError(
+            f"Calendar '{self.calendar_name}' not found. Available: {names}"
+        )
+
+    def close(self) -> None:
+        if hasattr(self, "_dav_client") and self._dav_client:
+            try:
+                self._dav_client.close()
+            except Exception:
+                pass
+            finally:
+                self._dav_client = None
+                self._calendar = None
 
     def upsert_event(
         self,
@@ -68,16 +79,17 @@ class CalendarClient:
         if self._calendar is None:
             raise RuntimeError("Not connected. Call connect() first.")
 
-        existing = self._find_existing(event_date)
-        if existing:
-            self.logger.info(f"Replacing existing event for {event_date.isoformat()}")
-            existing.delete()
+        existing_events = self._find_existing(event_date)
+        for ev in existing_events:
+            self.logger.info(f"Removing existing event for {event_date.isoformat()}")
+            ev.delete()
 
         ical = self._build_ical(event_date, names)
-        self._calendar.save_event(ical)
+        self._calendar.add_event(ical)
         self.logger.info(f"Saved event for {event_date.isoformat()} ({len(names)} names)")
 
-    def _find_existing(self, event_date: date):
+    def _find_existing(self, event_date: date) -> list:
+        matches = []
         try:
             start = datetime(event_date.year, event_date.month, event_date.day)
             end = start + timedelta(days=1)
@@ -86,20 +98,25 @@ class CalendarClient:
                 try:
                     summary = ev.vobject_instance.vevent.summary.value
                     if summary.startswith(self.event_prefix):
-                        return ev
+                        matches.append(ev)
                 except Exception:
                     continue
         except Exception as e:
             self.logger.warning(f"Error searching calendar for {event_date}: {e}")
-        return None
+        return matches
+
+    @staticmethod
+    def _ical_escape(text: str) -> str:
+        return text.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,")
 
     def _build_ical(self, event_date: date, names: List[str]) -> str:
         uid = str(uuid.uuid4())
         d_start = event_date.strftime("%Y%m%d")
         d_end = (event_date + timedelta(days=1)).strftime("%Y%m%d")
-        summary = f"{self.event_prefix} {self.event_title}"
-        description = "Anwesende Kollegen:\\n" + "\\n".join(f"- {n}" for n in names)
-        now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        summary = self._ical_escape(f"{self.event_prefix} {self.event_title}")
+        escaped_names = [self._ical_escape(n) for n in names]
+        description = "Anwesende Kollegen:\\n" + "\\n".join(f"- {n}" for n in escaped_names)
+        now = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         return (
             "BEGIN:VCALENDAR\r\n"
             "VERSION:2.0\r\n"
