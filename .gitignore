@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+*.egg
+
+# Environment — never commit secrets
+.env
+
+# Data dirs: keep structure, ignore content
+data/downloads/*
+data/debug/*
+data/logs/*
+data/state.json
+!data/downloads/.gitkeep
+!data/debug/.gitkeep
+!data/logs/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
