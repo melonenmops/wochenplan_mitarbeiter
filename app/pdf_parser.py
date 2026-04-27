@@ -12,8 +12,8 @@ except ImportError:
 
 
 _DAY_DATE_RE = re.compile(
-    r"(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|"
-    r"mo|di|mi|do|fr|sa|so)[.,\s]+(\d{1,2})[.\s/](\d{1,2})[.\s/]?(\d{4})?",
+    r"\b(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|"
+    r"mo|di|mi|do|fr|sa|so)\b[.,\s]*(\d{1,2})[.\s/](\d{1,2})[.\s/]?(\d{4})?",
     re.IGNORECASE,
 )
 _DATE_RE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b")
@@ -116,7 +116,7 @@ class PDFParser:
             Alice Muster, Bob Schmidt
         """
         result: Dict[str, List[str]] = {}
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
         i = 0
         while i < len(lines):
             m = _DAY_DATE_RE.search(lines[i])
@@ -144,7 +144,7 @@ class PDFParser:
     def _strategy_standalone_dates(self, text: str) -> Dict[str, List[str]]:
         """Parses DD.MM.YYYY followed by name lines."""
         result: Dict[str, List[str]] = {}
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
         for i, line in enumerate(lines):
             m = _DATE_RE.search(line)
             if m:
@@ -164,12 +164,16 @@ class PDFParser:
     def _names_from_line(self, line: str) -> List[str]:
         if _DATE_RE.search(line) or _DAY_DATE_RE.search(line):
             return []
-        if any(w in line.lower() for w in _HEADER_WORDS):
+        if any(re.search(r'\b' + re.escape(w) + r'\b', line, re.IGNORECASE) for w in _HEADER_WORDS):
             return []
         candidates = re.split(r"[,;]+", line)
         names = []
         for c in candidates:
             c = c.strip()
-            if 2 <= len(c) <= 60 and re.match(r"^[A-ZÄÖÜa-zäöüß\s\-\.]+$", c):
+            if (
+                2 <= len(c) <= 60
+                and re.match(r"^[A-ZÄÖÜa-zäöüß\s\-\.]+$", c)
+                and re.search(r"[A-ZÄÖÜa-zäöüß]", c)
+            ):
                 names.append(c)
         return names
