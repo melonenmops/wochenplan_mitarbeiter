@@ -6,4 +6,4 @@ cd "$DIR"
 
 source "$DIR/.venv/bin/activate"
 
-exec python -m app.main
+exec python3 -m app.main

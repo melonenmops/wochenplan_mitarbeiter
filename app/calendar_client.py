@@ -54,7 +54,7 @@ class CalendarClient:
         )
 
     def close(self) -> None:
-        if hasattr(self, "_dav_client") and self._dav_client:
+        if self._dav_client:
             try:
                 self._dav_client.close()
             except Exception:
@@ -109,6 +109,30 @@ class CalendarClient:
     def _ical_escape(text: str) -> str:
         return text.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,")
 
+    @staticmethod
+    def _ical_fold(line: str) -> str:
+        """Fold iCalendar lines longer than 75 octets per RFC 5545 §3.1."""
+        encoded = line.encode("utf-8")
+        if len(encoded) <= 75:
+            return line + "\r\n"
+        result = []
+        pos = 0
+        first = True
+        while pos < len(encoded):
+            limit = 75 if first else 74  # 74 because folded lines start with a space
+            chunk = encoded[pos:pos + limit]
+            # Back off to a valid UTF-8 boundary
+            while len(chunk) > 0:
+                try:
+                    chunk.decode("utf-8")
+                    break
+                except UnicodeDecodeError:
+                    chunk = chunk[:-1]
+            result.append(("" if first else " ") + chunk.decode("utf-8"))
+            pos += len(chunk)
+            first = False
+        return "\r\n".join(result) + "\r\n"
+
     def _build_ical(self, event_date: date, names: List[str]) -> str:
         uid = str(uuid.uuid4())
         d_start = event_date.strftime("%Y%m%d")
@@ -117,17 +141,18 @@ class CalendarClient:
         escaped_names = [self._ical_escape(n) for n in names]
         description = "Anwesende Kollegen:\\n" + "\\n".join(f"- {n}" for n in escaped_names)
         now = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        return (
-            "BEGIN:VCALENDAR\r\n"
-            "VERSION:2.0\r\n"
-            "PRODID:-//weekly-plan-calendar-notes//DE\r\n"
-            "BEGIN:VEVENT\r\n"
-            f"UID:{uid}\r\n"
-            f"DTSTAMP:{now}\r\n"
-            f"DTSTART;VALUE=DATE:{d_start}\r\n"
-            f"DTEND;VALUE=DATE:{d_end}\r\n"
-            f"SUMMARY:{summary}\r\n"
-            f"DESCRIPTION:{description}\r\n"
-            "END:VEVENT\r\n"
-            "END:VCALENDAR\r\n"
-        )
+        lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//weekly-plan-calendar-notes//DE",
+            "BEGIN:VEVENT",
+            f"UID:{uid}",
+            f"DTSTAMP:{now}",
+            f"DTSTART;VALUE=DATE:{d_start}",
+            f"DTEND;VALUE=DATE:{d_end}",
+            f"SUMMARY:{summary}",
+            f"DESCRIPTION:{description}",
+            "END:VEVENT",
+            "END:VCALENDAR",
+        ]
+        return "".join(self._ical_fold(line) for line in lines)
