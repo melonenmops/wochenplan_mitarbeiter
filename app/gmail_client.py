@@ -45,13 +45,16 @@ class GmailClient:
         if not self._imap:
             raise RuntimeError("Not connected. Call connect() first.")
 
-        self._imap.select(mailbox)
+        sel_status, _ = self._imap.select(mailbox)
+        if sel_status != "OK":
+            self.logger.warning(f"IMAP SELECT '{mailbox}' failed with status: {sel_status}")
+            return []
         status, data = self._imap.search(None, f'SUBJECT "{subject_filter}"')
         if status != "OK":
             self.logger.warning(f"IMAP SEARCH returned status: {status}")
             return []
 
-        nums = data[0].split()
+        nums = (data[0] or b"").split() if data else []
         self.logger.info(f"Found {len(nums)} email(s) matching subject '{subject_filter}'")
 
         results = []
@@ -73,7 +76,12 @@ class GmailClient:
                     self.logger.debug(f"Skipping '{msg.get('Subject', '')}' — no PDF attachment")
                     continue
 
-                message_id = msg.get("Message-ID", f"unknown-{num.decode()}").strip("<>")
+                raw_id = msg.get("Message-ID")
+                if raw_id:
+                    message_id = raw_id.strip("<>")
+                else:
+                    message_id = "unknown-" + hashlib.md5(raw).hexdigest()[:16]
+                    self.logger.warning(f"Email has no Message-ID; using content hash: {message_id}")
                 results.append({
                     "message_id": message_id,
                     "subject": msg.get("Subject", ""),
@@ -114,6 +122,10 @@ class GmailClient:
                 suffix = hashlib.md5(payload).hexdigest()[:8]
                 base, ext = os.path.splitext(safe_name)
                 dest = os.path.join(download_dir, f"{base}_{suffix}{ext}")
+            if os.path.exists(dest):
+                self.logger.debug(f"Skipping already-downloaded file: {dest}")
+                saved.append(dest)
+                continue
 
             with open(dest, "wb") as f:
                 f.write(payload)
