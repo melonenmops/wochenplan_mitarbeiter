@@ -21,7 +21,11 @@ def _bool_env(name: str, default: bool = False) -> bool:
 
 
 def _int_env(name: str, default: int = 0) -> int:
-    return int(os.getenv(name, str(default)).strip())
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(f"Environment variable {name!r} must be an integer, got: {raw!r}")
 
 
 @dataclass
