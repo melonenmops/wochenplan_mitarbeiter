@@ -2,9 +2,8 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$DIR"
 
 source "$DIR/.venv/bin/activate"
 
-python -m app.main
-
-exit $?
+exec python -m app.main

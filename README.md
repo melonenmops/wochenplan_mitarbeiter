@@ -13,7 +13,11 @@ Reads weekly plan PDFs from Gmail and creates iCloud calendar entries listing wh
 ## Setup
 
 1. Clone or copy the project to your server.
-2. Create a virtualenv:
+2. Verify Python version (3.11+ required):
+   ```bash
+   python3 --version
+   ```
+   Then create a virtualenv:
    ```bash
    python3 -m venv .venv
    ```
@@ -35,7 +39,13 @@ Reads weekly plan PDFs from Gmail and creates iCloud calendar entries listing wh
 
 ## Unraid Cron
 
-Add the job via **Unraid User Scripts** or drop a file into `/etc/cron.d/wochenplan`:
+Before adding to cron, test `run.sh` manually in a terminal first to confirm the virtualenv and `.env` are set up correctly:
+
+```bash
+bash /path/to/wochenplan/run.sh
+```
+
+Then add the job via **Unraid User Scripts** or drop a file into `/etc/cron.d/wochenplan`:
 
 ```
 0 7 * * 1 /path/to/wochenplan/run.sh >> /path/to/wochenplan/data/logs/cron.log 2>&1
@@ -60,12 +70,12 @@ All configuration is read from the `.env` file in the project root.
 | `CALENDAR_EVENT_TITLE` | Title of each calendar event | `Kollegen laut Wochenplan` |
 | `CALENDAR_EVENT_PREFIX` | Prefix tag used to identify managed events | `[WEEKLY_PLAN_COLLEAGUES]` |
 | `NTFY_ENABLED` | Enable ntfy push notifications | `false` |
-| `NTFY_URL` | ntfy server URL | `https://ntfy.sh` |
+| `NTFY_URL` | ntfy server URL (the default is the public ntfy.sh server — use your own for privacy) | `https://ntfy.sh` |
 | `NTFY_TOPIC` | ntfy topic to publish to | `my-wochenplan` |
 | `NTFY_USERNAME` | ntfy username (optional) | — |
 | `NTFY_PASSWORD` | ntfy password (optional) | — |
 | `DRY_RUN` | When `true`, no calendar changes are made | `true` |
-| `DEBUG_PDF_TEXT` | When `true`, dumps extracted PDF text to `data/debug/` | `true` |
+| `DEBUG_PDF_TEXT` | When `true`, dumps extracted PDF text to `data/debug/` — defaults to `true` even if the variable is absent from `.env` | `true` |
 | `LOG_LEVEL` | Python log level (`DEBUG`, `INFO`, `WARNING`, …) | `INFO` |
 | `STATE_FILE` | Path to the idempotency state file | `data/state.json` |
 | `DOWNLOAD_DIR` | Directory for downloaded PDF attachments | `data/downloads` |
