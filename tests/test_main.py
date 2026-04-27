@@ -2,6 +2,8 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 
+import app.main as main_module
+
 
 def _set_env(monkeypatch, tmp_path):
     monkeypatch.setenv("GMAIL_EMAIL", "test@gmail.com")
@@ -42,10 +44,7 @@ def test_dry_run_does_not_connect_calendar(tmp_path, monkeypatch):
          patch("app.main.PDFParser", return_value=mock_parser), \
          patch("app.main.CalendarClient", return_value=mock_calendar), \
          patch("app.main.Notifier", return_value=MagicMock()):
-        from importlib import reload
-        import app.main as m
-        reload(m)
-        exit_code = m.run()
+        exit_code = main_module.run()
 
     mock_calendar.connect.assert_not_called()
     mock_calendar.upsert_event.assert_called()
@@ -73,10 +72,7 @@ def test_already_processed_message_skipped(tmp_path, monkeypatch):
          patch("app.main.PDFParser", return_value=mock_parser), \
          patch("app.main.CalendarClient", return_value=mock_calendar), \
          patch("app.main.Notifier", return_value=MagicMock()):
-        from importlib import reload
-        import app.main as m
-        reload(m)
-        m.run()
+        main_module.run()
 
     mock_parser.parse.assert_not_called()
 
@@ -99,10 +95,7 @@ def test_parser_failure_records_failed_state(tmp_path, monkeypatch):
          patch("app.main.PDFParser", return_value=mock_parser), \
          patch("app.main.CalendarClient", return_value=mock_calendar), \
          patch("app.main.Notifier", return_value=MagicMock()):
-        from importlib import reload
-        import app.main as m
-        reload(m)
-        exit_code = m.run()
+        exit_code = main_module.run()
 
     from app.state import StateManager
     sm = StateManager(str(tmp_path / "state.json"))

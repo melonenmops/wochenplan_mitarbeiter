@@ -3,19 +3,13 @@ import os
 import sys
 from datetime import date
 
+from app.calendar_client import CalendarClient
 from app.config import Config
+from app.gmail_client import GmailClient
 from app.logging_setup import setup_logging
+from app.notify import Notifier
+from app.pdf_parser import PDFParser
 from app.state import StateManager
-
-# These imports are guarded so that test patches applied before reload() are preserved.
-if "GmailClient" not in globals():
-    from app.gmail_client import GmailClient
-if "PDFParser" not in globals():
-    from app.pdf_parser import PDFParser
-if "CalendarClient" not in globals():
-    from app.calendar_client import CalendarClient
-if "Notifier" not in globals():
-    from app.notify import Notifier
 
 
 def run() -> int:
