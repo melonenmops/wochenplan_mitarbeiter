@@ -1,4 +1,5 @@
 import email as email_lib
+import email.message
 import hashlib
 import imaplib
 import logging
