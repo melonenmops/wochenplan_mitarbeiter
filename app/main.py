@@ -48,8 +48,6 @@ def run() -> int:
         username=cfg.icloud_username,
         app_password=cfg.icloud_app_password,
         calendar_name=cfg.icloud_calendar_name,
-        event_title=cfg.calendar_event_title,
-        event_prefix=cfg.calendar_event_prefix,
         logger=logger,
     )
 
@@ -80,8 +78,11 @@ def run() -> int:
             msg_id = email_info["message_id"]
 
             if state.is_processed(msg_id):
-                logger.info(f"Already processed, skipping: {msg_id}")
-                continue
+                if cfg.force_reprocess:
+                    logger.info(f"FORCE_REPROCESS active — reprocessing: {msg_id}")
+                else:
+                    logger.info(f"Already processed, skipping: {msg_id}")
+                    continue
 
             try:
                 pdf_paths = gmail.download_email_attachments(email_info, cfg.download_dir)
@@ -99,9 +100,9 @@ def run() -> int:
             state.record(msg_id, "downloaded", filename=pdf_paths[0])
 
             for pdf_path in pdf_paths:
-                schedule = parser.parse(pdf_path)
+                result = parser.parse(pdf_path)
 
-                if not schedule:
+                if not result.days:
                     logger.warning(f"Parser returned no data for {pdf_path}")
                     state.record(
                         msg_id, "failed", filename=pdf_path,
@@ -117,15 +118,16 @@ def run() -> int:
 
                 state.record(
                     msg_id, "parsed", filename=pdf_path,
-                    details={"dates_found": list(schedule.keys())},
+                    details={"dates_found": list(result.days.keys()), "location": result.location},
                 )
 
                 cal_errors = []
-                for date_str, names in sorted(schedule.items()):
+                for date_str, names in sorted(result.days.items()):
                     try:
                         calendar.upsert_event(
                             event_date=date.fromisoformat(date_str),
                             names=names,
+                            location=result.location,
                             dry_run=cfg.dry_run,
                         )
                     except Exception as e:
@@ -142,12 +144,13 @@ def run() -> int:
                 else:
                     state.record(
                         msg_id, "calendar_written", filename=pdf_path,
-                        details={"dates_written": list(schedule.keys())},
+                        details={"dates_written": list(result.days.keys())},
                     )
                     processed_ok += 1
                     notifier.send(
                         "Wochenplan OK",
-                        f"{len(schedule)} Tag(e) eingetragen aus {os.path.basename(pdf_path)}",
+                        f"{len(result.days)} Tag(e) eingetragen aus {os.path.basename(pdf_path)}"
+                        + (f" [{result.location}]" if result.location else ""),
                     )
     finally:
         gmail.close()

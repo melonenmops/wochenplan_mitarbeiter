@@ -42,10 +42,6 @@ class Config:
     icloud_app_password: str = field(default_factory=lambda: _require("ICLOUD_APP_PASSWORD"))
     icloud_calendar_name: str = field(default_factory=lambda: _require("ICLOUD_CALENDAR_NAME"))
 
-    # Calendar event
-    calendar_event_title: str = field(default_factory=lambda: _optional("CALENDAR_EVENT_TITLE", "Kollegen laut Wochenplan"))
-    calendar_event_prefix: str = field(default_factory=lambda: _optional("CALENDAR_EVENT_PREFIX", "[WEEKLY_PLAN_COLLEAGUES]"))
-
     # ntfy
     ntfy_enabled: bool = field(default_factory=lambda: _bool_env("NTFY_ENABLED", False))
     ntfy_url: str = field(default_factory=lambda: _optional("NTFY_URL", "https://ntfy.sh"))
@@ -55,6 +51,7 @@ class Config:
 
     # Behavior
     dry_run: bool = field(default_factory=lambda: _bool_env("DRY_RUN", True))
+    force_reprocess: bool = field(default_factory=lambda: _bool_env("FORCE_REPROCESS", False))
     debug_pdf_text: bool = field(default_factory=lambda: _bool_env("DEBUG_PDF_TEXT", True))
     log_level: str = field(default_factory=lambda: _optional("LOG_LEVEL", "INFO"))
 

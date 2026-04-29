@@ -9,6 +9,8 @@ try:
 except ImportError:
     _HAS_CALDAV = False
 
+_MANAGED_PREFIXES = ("👥 Kollegen", "[WEEKLY_PLAN_COLLEAGUES]")
+
 
 class CalendarClient:
     def __init__(
@@ -17,16 +19,12 @@ class CalendarClient:
         username: str,
         app_password: str,
         calendar_name: str,
-        event_title: str,
-        event_prefix: str,
         logger: Optional[logging.Logger] = None,
     ):
         self.caldav_url = caldav_url
         self.username = username
         self._app_password = app_password
         self.calendar_name = calendar_name
-        self.event_title = event_title
-        self.event_prefix = event_prefix
         self.logger = logger or logging.getLogger("wochenplan.calendar")
         self._calendar = None
         self._dav_client = None
@@ -67,12 +65,14 @@ class CalendarClient:
         self,
         event_date: date,
         names: List[str],
+        location: str = "",
         dry_run: bool = True,
     ) -> None:
+        display_location = location or "Standort unbekannt"
         if dry_run:
             self.logger.info(
-                f"[DRY-RUN] Would upsert {event_date.isoformat()}: "
-                f"{len(names)} name(s): {', '.join(names)}"
+                f"[DRY-RUN] Would upsert {event_date.isoformat()} "
+                f"({display_location}): {len(names)} name(s): {', '.join(names)}"
             )
             return
 
@@ -84,9 +84,12 @@ class CalendarClient:
             self.logger.info(f"Removing existing event for {event_date.isoformat()}")
             ev.delete()
 
-        ical = self._build_ical(event_date, names)
+        ical = self._build_ical(event_date, names, display_location)
         self._calendar.add_event(ical)
-        self.logger.info(f"Saved event for {event_date.isoformat()} ({len(names)} names)")
+        self.logger.info(
+            f"Saved event for {event_date.isoformat()} "
+            f"({display_location}, {len(names)} name(s))"
+        )
 
     def _find_existing(self, event_date: date) -> list:
         matches = []
@@ -97,7 +100,7 @@ class CalendarClient:
             for ev in events:
                 try:
                     summary = ev.vobject_instance.vevent.summary.value
-                    if summary.startswith(self.event_prefix):
+                    if any(summary.startswith(p) for p in _MANAGED_PREFIXES):
                         matches.append(ev)
                 except Exception:
                     continue
@@ -119,9 +122,8 @@ class CalendarClient:
         pos = 0
         first = True
         while pos < len(encoded):
-            limit = 75 if first else 74  # 74 because folded lines start with a space
+            limit = 75 if first else 74
             chunk = encoded[pos:pos + limit]
-            # Back off to a valid UTF-8 boundary
             while len(chunk) > 0:
                 try:
                     chunk.decode("utf-8")
@@ -133,13 +135,20 @@ class CalendarClient:
             first = False
         return "\r\n".join(result) + "\r\n"
 
-    def _build_ical(self, event_date: date, names: List[str]) -> str:
+    def _build_ical(self, event_date: date, names: List[str], location: str) -> str:
         uid = str(uuid.uuid4())
         d_start = event_date.strftime("%Y%m%d")
         d_end = (event_date + timedelta(days=1)).strftime("%Y%m%d")
-        summary = self._ical_escape(f"{self.event_prefix} {self.event_title}")
-        escaped_names = [self._ical_escape(n) for n in names]
-        description = "Anwesende Kollegen:\\n" + "\\n".join(f"- {n}" for n in escaped_names)
+        summary = self._ical_escape(f"👥 Kollegen – {location}")
+        loc_escaped = self._ical_escape(location)
+        if names:
+            bullets = "\\n".join(f"• {self._ical_escape(n)}" for n in names)
+            description = f"Anwesende Kollegen ({loc_escaped}):\\n{bullets}"
+        else:
+            description = (
+                f"Anwesende Kollegen ({loc_escaped}):\\n\\n"
+                "Keine anwesenden Kollegen gefunden."
+            )
         now = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         lines = [
             "BEGIN:VCALENDAR",

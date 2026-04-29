@@ -10,8 +10,6 @@ def _set_all_env(monkeypatch):
     monkeypatch.setenv("ICLOUD_USERNAME", "user@icloud.com")
     monkeypatch.setenv("ICLOUD_APP_PASSWORD", "appsecret")
     monkeypatch.setenv("ICLOUD_CALENDAR_NAME", "Wochenplan")
-    monkeypatch.setenv("CALENDAR_EVENT_TITLE", "Kollegen laut Wochenplan")
-    monkeypatch.setenv("CALENDAR_EVENT_PREFIX", "[WEEKLY_PLAN_COLLEAGUES]")
     monkeypatch.setenv("DRY_RUN", "true")
     monkeypatch.setenv("DEBUG_PDF_TEXT", "false")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
@@ -32,7 +30,6 @@ def test_config_loads_required_values(monkeypatch):
     assert cfg.gmail_imap_port == 993
     assert cfg.dry_run is True
     assert cfg.debug_pdf_text is False
-    assert cfg.calendar_event_prefix == "[WEEKLY_PLAN_COLLEAGUES]"
     assert cfg.icloud_calendar_name == "Wochenplan"
 
 
