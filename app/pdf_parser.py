@@ -17,6 +17,11 @@ _DAY_DATE_RE = re.compile(
     re.IGNORECASE,
 )
 _DATE_RE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b")
+_GRAPHICAL_DAY_HEADER_RE = re.compile(
+    r"^(Mo|Di|Mi|Do|Fr|Sa|So)[.,]\s*(\d{1,2})\.(\d{1,2})\.\s",
+    re.IGNORECASE,
+)
+_TIME_RANGE_RE = re.compile(r"\s*\*?\s*\d{1,2}:\d{2}-\d{2}:\d{2}\s*$")
 
 _HEADER_WORDS = frozenset(["wochenplan", "kw", "datum", "name", "tag", "kalenderwoche"])
 
@@ -99,7 +104,7 @@ class PDFParser:
             self.logger.warning(f"Could not save debug text: {e}")
 
     def _run_strategies(self, text: str, pdf_path: str) -> Dict[str, List[str]]:
-        for fn in [self._strategy_day_headers, self._strategy_standalone_dates]:
+        for fn in [self._strategy_graphical_schedule, self._strategy_day_headers, self._strategy_standalone_dates]:
             try:
                 result = fn(text)
                 if result:
@@ -160,6 +165,57 @@ class PDFParser:
                 if names:
                     result[d.isoformat()] = names
         return result
+
+    def _strategy_graphical_schedule(self, text: str) -> Dict[str, List[str]]:
+        """Parses the graphical shift-plan format:
+            Mo, 27.04. 7 8 9 10 11 ...
+            Rassel, Maike 07:30-15:00
+            Teitz, Judith* 17:00-19:00
+        Year is inferred from the first DD.MM.YYYY found in the document.
+        """
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+        year = None
+        for line in lines:
+            m = _DATE_RE.search(line)
+            if m:
+                year = int(m.group(3))
+                break
+        if year is None:
+            return {}
+
+        result: Dict[str, List[str]] = {}
+        current_date = None
+        current_names: List[str] = []
+
+        for line in lines:
+            day_m = _GRAPHICAL_DAY_HEADER_RE.match(line)
+            if day_m:
+                if current_date and current_names:
+                    result[current_date.isoformat()] = current_names
+                try:
+                    current_date = datetime(year, int(day_m.group(3)), int(day_m.group(2))).date()
+                except ValueError:
+                    current_date = None
+                current_names = []
+            elif current_date is not None:
+                name = self._name_from_schedule_line(line)
+                if name:
+                    current_names.append(name)
+
+        if current_date and current_names:
+            result[current_date.isoformat()] = current_names
+
+        return result
+
+    def _name_from_schedule_line(self, line: str) -> Optional[str]:
+        """Extract name from a line like 'Rassel, Maike 07:30-15:00' or 'Teitz, Judith* 17:00-19:00'."""
+        name = _TIME_RANGE_RE.sub("", line).strip().rstrip("* ").strip()
+        if not name or len(name) < 2 or len(name) > 80:
+            return None
+        if not re.match(r"^[A-ZÄÖÜa-zäöüß\s,\-\.]+$", name):
+            return None
+        return name
 
     def _names_from_line(self, line: str) -> List[str]:
         if _DATE_RE.search(line) or _DAY_DATE_RE.search(line):
